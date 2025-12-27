@@ -1,0 +1,7 @@
+{
+  "name": "Agent Academy",
+  "description": "A whimsical, hand-drawn AI Agent management dashboard. Track your little robot helpers and their digital chores!",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
