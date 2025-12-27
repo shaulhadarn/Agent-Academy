@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Agent, AIConfig } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -81,13 +80,6 @@ const GlobalChat: React.FC<GlobalChatProps> = ({ agents, aiConfig }) => {
             response_format: { type: "json_object" }
         });
         const text = completion.choices[0].message.content || "[]";
-        // OpenAI might wrap the array in a key like "response" if not perfectly prompted for top-level array in json_object mode, 
-        // but often it follows the example. Let's try parsing. 
-        // Note: OpenAI 'json_object' format requires the word 'json' in prompt, which we have. 
-        // Sometimes it returns { "agents": [...] }. We might need to handle that or standard prompt.
-        // A safer prompt for OpenAI JSON mode usually asks for a specific schema, but let's try direct parse.
-        // Or we can fallback to text mode and parse. 
-        // Actually for multi-agent, let's keep it simple.
         try {
             responses = JSON.parse(text);
              // If wrapped in object keys
@@ -150,29 +142,29 @@ const GlobalChat: React.FC<GlobalChatProps> = ({ agents, aiConfig }) => {
     // h-full allows it to take the flex-1 space from the App layout
     <div className="flex flex-col h-[calc(100vh-200px)] md:h-[calc(100vh-140px)] animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="px-2 mb-4">
-        <h3 className="text-2xl font-black italic text-gray-900 underline decoration-green-400 decoration-4">Global Council 💬</h3>
-        <p className="text-[10px] font-black uppercase text-gray-500">Chat with the whole squad</p>
+        <h3 className="text-2xl font-black italic text-gray-900 dark:text-white underline decoration-green-400 decoration-4">Global Council 💬</h3>
+        <p className="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">Chat with the whole squad</p>
       </div>
 
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto space-y-4 p-4 mb-4 bg-white/60 border-4 border-black wobbly-border shadow-[inset_4px_4px_10px_rgba(0,0,0,0.1)] no-scrollbar"
+        className="flex-1 overflow-y-auto space-y-4 p-4 mb-4 bg-white/60 dark:bg-zinc-800/60 border-4 border-black dark:border-white wobbly-border shadow-[inset_4px_4px_10px_rgba(0,0,0,0.1)] no-scrollbar"
       >
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-start gap-2 ${msg.isUser ? 'flex-row-reverse' : 'flex-row'}`}>
             <div 
-              className="w-10 h-10 rounded-full border-2 border-black overflow-hidden flex-shrink-0 bg-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
-              style={{ borderColor: msg.isUser ? 'black' : msg.color }}
+              className="w-10 h-10 rounded-full border-2 border-black dark:border-white overflow-hidden flex-shrink-0 bg-white shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] dark:shadow-[1px_1px_0px_0px_rgba(255,255,255,1)]"
+              style={{ borderColor: msg.isUser ? (document.documentElement.classList.contains('dark') ? 'white' : 'black') : msg.color }}
             >
               <img src={msg.senderAvatar} alt={msg.senderName} className="w-full h-full object-contain" />
             </div>
             <div className={`flex flex-col ${msg.isUser ? 'items-end' : 'items-start'}`}>
-              <span className="text-[10px] font-black uppercase text-gray-800 mb-0.5 tracking-tighter ml-1 mr-1">{msg.senderName}</span>
+              <span className="text-[10px] font-black uppercase text-gray-800 dark:text-gray-300 mb-0.5 tracking-tighter ml-1 mr-1">{msg.senderName}</span>
               <div 
-                className={`max-w-[280px] md:max-w-md p-3 rounded-2xl border-2 border-black text-sm font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] text-gray-900 ${
-                  msg.isUser ? 'bg-blue-100' : 'bg-white'
+                className={`max-w-[280px] md:max-w-md p-3 rounded-2xl border-2 border-black dark:border-white text-sm font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] text-gray-900 ${
+                  msg.isUser ? 'bg-blue-100 dark:bg-blue-900 text-black dark:text-white' : 'bg-white dark:bg-zinc-700 text-black dark:text-white'
                 }`}
-                style={{ borderLeftColor: msg.isUser ? 'black' : msg.color, borderLeftWidth: !msg.isUser ? '6px' : '2px' }}
+                style={{ borderLeftColor: msg.isUser ? (document.documentElement.classList.contains('dark') ? 'white' : 'black') : msg.color, borderLeftWidth: !msg.isUser ? '6px' : '2px' }}
               >
                 {msg.text}
               </div>
@@ -181,8 +173,8 @@ const GlobalChat: React.FC<GlobalChatProps> = ({ agents, aiConfig }) => {
         ))}
         {isTyping && (
           <div className="flex items-center gap-2 animate-pulse">
-            <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-400"></div>
-            <div className="bg-gray-100 p-2 rounded-xl text-[10px] font-black text-gray-600">AGENTS ARE DISCUSSING...</div>
+            <div className="w-8 h-8 rounded-full border-2 border-dashed border-gray-400 dark:border-gray-500"></div>
+            <div className="bg-gray-100 dark:bg-zinc-700 p-2 rounded-xl text-[10px] font-black text-gray-600 dark:text-gray-300">AGENTS ARE DISCUSSING...</div>
           </div>
         )}
       </div>
@@ -193,11 +185,11 @@ const GlobalChat: React.FC<GlobalChatProps> = ({ agents, aiConfig }) => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Summon the council..."
-          className="w-full bg-gray-900 border-4 border-black p-4 pr-16 rounded-3xl focus:outline-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] text-white font-black placeholder-gray-400 transition-colors"
+          className="w-full bg-gray-900 dark:bg-zinc-800 border-4 border-black dark:border-white p-4 pr-16 rounded-3xl focus:outline-none shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] text-white font-black placeholder-gray-400 transition-colors"
         />
         <button 
           type="submit"
-          className="absolute right-3 top-3 bg-green-400 border-2 border-black p-2 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:translate-y-0.5 active:shadow-none transition-all hover:bg-green-300"
+          className="absolute right-3 top-3 bg-green-400 border-2 border-black dark:border-white p-2 rounded-xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] active:translate-y-0.5 active:shadow-none transition-all hover:bg-green-300"
         >
           🚀
         </button>

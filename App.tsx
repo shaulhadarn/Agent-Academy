@@ -8,6 +8,7 @@ import TasksView from './components/TasksView';
 import UpgradesView from './components/UpgradesView';
 import SettingsView from './components/SettingsView';
 import GlobalChat from './components/GlobalChat';
+import OrchestratorView from './components/OrchestratorView';
 
 const INITIAL_AGENTS: Agent[] = [
   {
@@ -88,9 +89,10 @@ const INITIAL_UPGRADES: SystemUpgrade[] = [
   { id: 'u3', agentId: '4', title: 'Neural Link v2', date: 'Dec 12, 2025', component: 'Memory Bank' },
 ];
 
-type ViewState = 'home' | 'tasks' | 'upgrades' | 'settings' | 'chat';
+type ViewState = 'home' | 'tasks' | 'upgrades' | 'settings' | 'chat' | 'orchestrator';
 
 const AI_CONFIG_KEY = 'agent_academy_config_v1';
+const THEME_KEY = 'agent_academy_theme_v1';
 
 const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
@@ -100,6 +102,15 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewState>('home');
   
+  // Theme State
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(THEME_KEY);
+        return (saved === 'dark' || saved === 'light') ? saved : 'light';
+    }
+    return 'light';
+  });
+
   // AI Config State with LocalStorage Persistence
   const [aiConfig, setAiConfig] = useState<AIConfig>(() => {
     if (typeof window !== 'undefined') {
@@ -123,6 +134,11 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(aiConfig));
   }, [aiConfig]);
+
+  // Save Theme to LocalStorage
+  useEffect(() => {
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   const activeAgent = agents.find(a => a.id === selectedAgentId) || agents[0];
 
@@ -178,11 +194,20 @@ const App: React.FC = () => {
             agent={activeAgent} 
             aiConfig={aiConfig}
             onUpdateAiConfig={setAiConfig}
+            theme={theme}
+            setTheme={setTheme}
           />
         );
       case 'chat':
         return (
           <GlobalChat 
+            agents={agents} 
+            aiConfig={aiConfig}
+          />
+        );
+      case 'orchestrator':
+        return (
+          <OrchestratorView 
             agents={agents} 
             aiConfig={aiConfig}
           />
@@ -197,111 +222,115 @@ const App: React.FC = () => {
       onClick={() => setActiveTab(tab)}
       className={`
         relative group flex items-center justify-center md:justify-start md:px-4 md:w-full md:h-14 transition-all duration-200 
-        ${activeTab === tab ? 'md:bg-yellow-200 md:translate-x-2' : 'hover:md:bg-white/50 hover:md:translate-x-1'}
-        ${activeTab === tab ? 'scale-125 translate-y-[-4px] md:scale-100 md:translate-y-0 drop-shadow-lg md:shadow-none' : 'opacity-40 grayscale md:opacity-100 md:grayscale-0 md:text-gray-500'}
+        ${activeTab === tab ? 'md:bg-yellow-200 md:translate-x-2 dark:md:bg-yellow-500' : 'hover:md:bg-white/50 dark:hover:md:bg-white/10 hover:md:translate-x-1'}
+        ${activeTab === tab ? 'scale-125 translate-y-[-4px] md:scale-100 md:translate-y-0 drop-shadow-lg md:shadow-none' : 'opacity-40 grayscale md:opacity-100 md:grayscale-0 md:text-gray-500 dark:md:text-gray-400'}
       `}
     >
       <span className="text-2xl">{icon}</span>
-      <span className={`hidden md:block ml-3 font-black text-sm uppercase tracking-wide ${activeTab === tab ? 'text-black' : ''}`}>{label}</span>
+      <span className={`hidden md:block ml-3 font-black text-sm uppercase tracking-wide ${activeTab === tab ? 'text-black dark:text-gray-900' : 'dark:text-gray-300'}`}>{label}</span>
       
       {/* Active Indicator Desktop */}
       {activeTab === tab && (
-        <div className="hidden md:block absolute left-0 w-1 h-8 bg-black rounded-r-full"></div>
+        <div className="hidden md:block absolute left-0 w-1 h-8 bg-black dark:bg-white rounded-r-full"></div>
       )}
     </button>
   );
 
   return (
-    <div className="min-h-screen bg-[#FFFDE7] text-gray-900 font-sans relative overflow-x-hidden">
-      {/* Fixed Background Elements */}
-      <div className="fixed top-[-50px] right-[-50px] w-48 h-48 md:w-96 md:h-96 bg-[#03A9F4] opacity-10 blob-1 animate-bounce-slow pointer-events-none z-0"></div>
-      <div className="fixed bottom-[100px] left-[-40px] w-40 h-40 md:w-80 md:h-80 bg-[#F06292] opacity-10 blob-2 animate-pulse pointer-events-none z-0"></div>
-      <div className="fixed top-[40%] left-[50%] w-64 h-64 bg-yellow-300 opacity-5 rounded-full blur-3xl pointer-events-none z-0"></div>
+    <div className={`${theme}`}>
+      <div className="min-h-screen bg-[#FFFDE7] dark:bg-zinc-950 text-gray-900 dark:text-white font-sans relative overflow-x-hidden transition-colors duration-300">
+        {/* Fixed Background Elements */}
+        <div className="fixed top-[-50px] right-[-50px] w-48 h-48 md:w-96 md:h-96 bg-[#03A9F4] dark:bg-blue-600 opacity-10 blob-1 animate-bounce-slow pointer-events-none z-0"></div>
+        <div className="fixed bottom-[100px] left-[-40px] w-40 h-40 md:w-80 md:h-80 bg-[#F06292] dark:bg-pink-600 opacity-10 blob-2 animate-pulse pointer-events-none z-0"></div>
+        <div className="fixed top-[40%] left-[50%] w-64 h-64 bg-yellow-300 dark:bg-yellow-600 opacity-5 rounded-full blur-3xl pointer-events-none z-0"></div>
 
-      <div className="relative z-10 flex flex-col md:flex-row min-h-screen">
-        
-        {/* Desktop Sidebar */}
-        <nav className="hidden md:flex flex-col w-64 bg-white/80 backdrop-blur-sm border-r-4 border-black h-screen sticky top-0 z-50">
-           <div className="p-6">
-             <div className="flex items-center gap-2 mb-8">
-                <div className="w-10 h-10 bg-yellow-400 border-2 border-black rounded-full flex items-center justify-center text-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] animate-bounce-slow">
-                  🤖
-                </div>
-                <h1 className="text-xl font-black italic leading-none">Agent<br/>Academy</h1>
-             </div>
-             
-             <div className="space-y-2">
-                <NavButton tab="home" icon="🤖" label="Dashboard" />
-                <NavButton tab="tasks" icon="⚡" label="Missions" />
-                <NavButton tab="chat" icon="💬" label="Council" />
-                <NavButton tab="upgrades" icon="🛰️" label="Upgrades" />
-                <NavButton tab="settings" icon="⚙️" label="Config" />
-             </div>
-           </div>
-
-           <div className="mt-auto p-6 border-t-2 border-dashed border-gray-300">
-             <div className="bg-pink-100 border-2 border-black p-3 rounded-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-                <p className="text-[10px] font-black uppercase text-pink-500">System Status</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`w-2 h-2 rounded-full animate-pulse ${aiConfig.provider === 'openai' ? 'bg-green-600' : 'bg-blue-600'}`}></span>
-                  <span className="text-xs font-bold">{aiConfig.provider === 'openai' ? 'OpenAI Online' : 'Gemini Online'}</span>
-                </div>
-             </div>
-           </div>
-        </nav>
-
-        {/* Main Content Area */}
-        <main className="flex-1 flex flex-col h-full max-h-screen overflow-y-auto">
-          <div className="p-4 md:p-8 max-w-7xl mx-auto w-full pb-28 md:pb-8">
-            <div className="md:hidden">
-              <Header />
-            </div>
-
-            {/* Desktop Header for context */}
-            <div className="hidden md:flex justify-between items-center mb-6">
-               <div>
-                  <h2 className="text-3xl font-black italic underline decoration-yellow-400">
-                    {activeTab === 'home' && 'Command Center'}
-                    {activeTab === 'tasks' && 'Mission Control'}
-                    {activeTab === 'chat' && 'The Council'}
-                    {activeTab === 'upgrades' && 'System Patch'}
-                    {activeTab === 'settings' && 'Core Bios'}
-                  </h2>
-                  <p className="text-sm font-bold text-gray-500">Welcome back, Human!</p>
+        <div className="relative z-10 flex flex-col md:flex-row min-h-screen">
+          
+          {/* Desktop Sidebar */}
+          <nav className="hidden md:flex flex-col w-64 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border-r-4 border-black dark:border-white h-screen sticky top-0 z-50 transition-colors duration-300">
+             <div className="p-6">
+               <div className="flex items-center gap-2 mb-8">
+                  <div className="w-10 h-10 bg-yellow-400 border-2 border-black dark:border-white rounded-full flex items-center justify-center text-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] animate-bounce-slow">
+                    🤖
+                  </div>
+                  <h1 className="text-xl font-black italic leading-none dark:text-white">Agent<br/>Academy</h1>
                </div>
-            </div>
-            
-            {activeTab !== 'chat' && (
-              <AgentSelector 
-                agents={agents} 
-                selectedId={selectedAgentId} 
-                onSelect={setSelectedAgentId} 
-                onAddClick={() => setIsModalOpen(true)}
-              />
-            )}
+               
+               <div className="space-y-2">
+                  <NavButton tab="home" icon="🤖" label="Dashboard" />
+                  <NavButton tab="tasks" icon="⚡" label="Missions" />
+                  <NavButton tab="chat" icon="💬" label="Council" />
+                  <NavButton tab="orchestrator" icon="🎼" label="Orchestrator" />
+                  <NavButton tab="upgrades" icon="🛰️" label="Upgrades" />
+                  <NavButton tab="settings" icon="⚙️" label="Config" />
+               </div>
+             </div>
 
-            <div className="mt-6 transition-all duration-300">
-              {renderActiveView()}
+             <div className="mt-auto p-6 border-t-2 border-dashed border-gray-300 dark:border-zinc-700">
+               <div className="bg-pink-100 dark:bg-zinc-800 border-2 border-black dark:border-white p-3 rounded-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]">
+                  <p className="text-[10px] font-black uppercase text-pink-500 dark:text-pink-400">System Status</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`w-2 h-2 rounded-full animate-pulse ${aiConfig.provider === 'openai' ? 'bg-green-600' : 'bg-blue-600'}`}></span>
+                    <span className="text-xs font-bold dark:text-gray-200">{aiConfig.provider === 'openai' ? 'OpenAI Online' : 'Gemini Online'}</span>
+                  </div>
+               </div>
+             </div>
+          </nav>
+
+          {/* Main Content Area */}
+          <main className="flex-1 flex flex-col h-full max-h-screen overflow-y-auto">
+            <div className="p-4 md:p-8 max-w-7xl mx-auto w-full pb-28 md:pb-8">
+              <div className="md:hidden">
+                <Header />
+              </div>
+
+              {/* Desktop Header for context */}
+              <div className="hidden md:flex justify-between items-center mb-6">
+                 <div>
+                    <h2 className="text-3xl font-black italic underline decoration-yellow-400 dark:decoration-yellow-500 dark:text-white">
+                      {activeTab === 'home' && 'Command Center'}
+                      {activeTab === 'tasks' && 'Mission Control'}
+                      {activeTab === 'chat' && 'The Council'}
+                      {activeTab === 'orchestrator' && 'Flow Studio'}
+                      {activeTab === 'upgrades' && 'System Patch'}
+                      {activeTab === 'settings' && 'Core Bios'}
+                    </h2>
+                    <p className="text-sm font-bold text-gray-500 dark:text-gray-400">Welcome back, Human!</p>
+                 </div>
+              </div>
+              
+              {activeTab !== 'chat' && activeTab !== 'orchestrator' && (
+                <AgentSelector 
+                  agents={agents} 
+                  selectedId={selectedAgentId} 
+                  onSelect={setSelectedAgentId} 
+                  onAddClick={() => setIsModalOpen(true)}
+                />
+              )}
+
+              <div className="mt-6 transition-all duration-300 h-full">
+                {renderActiveView()}
+              </div>
             </div>
-          </div>
-        </main>
+          </main>
+        </div>
+
+        {isModalOpen && (
+          <AddAgentModal 
+            onClose={() => setIsModalOpen(false)} 
+            onAdd={handleAddAgent} 
+          />
+        )}
+
+        {/* Mobile Bottom Navigation */}
+        <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-sm h-16 bg-white dark:bg-zinc-900 border-4 border-black dark:border-white wobbly-border flex items-center justify-around z-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]">
+          <NavButton tab="home" icon="🤖" label="Home" />
+          <NavButton tab="tasks" icon="⚡" label="Tasks" />
+          <NavButton tab="chat" icon="💬" label="Chat" />
+          <NavButton tab="orchestrator" icon="🎼" label="Flow" />
+          <NavButton tab="settings" icon="⚙️" label="Set" />
+        </nav>
       </div>
-
-      {isModalOpen && (
-        <AddAgentModal 
-          onClose={() => setIsModalOpen(false)} 
-          onAdd={handleAddAgent} 
-        />
-      )}
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm h-16 bg-white border-4 border-black wobbly-border flex items-center justify-around z-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-        <NavButton tab="home" icon="🤖" label="Home" />
-        <NavButton tab="tasks" icon="⚡" label="Tasks" />
-        <NavButton tab="chat" icon="💬" label="Chat" />
-        <NavButton tab="upgrades" icon="🛰️" label="Up" />
-        <NavButton tab="settings" icon="⚙️" label="Set" />
-      </nav>
     </div>
   );
 };
