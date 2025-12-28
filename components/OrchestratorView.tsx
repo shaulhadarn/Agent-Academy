@@ -1,40 +1,42 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import ReactFlow, { 
   Controls, 
   Background, 
-  applyEdgeChanges, 
-  applyNodeChanges, 
   addEdge,
   Connection,
   Edge,
   Node,
-  NodeChange,
-  EdgeChange,
   useNodesState,
   useEdgesState
 } from 'reactflow';
 import WorkflowNode from './WorkflowNode';
-import { Agent, AIConfig } from '../types';
+import { Agent, AIConfig, WorkflowLog } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 
 interface OrchestratorViewProps {
   agents: Agent[];
   aiConfig: AIConfig;
+  onWorkflowComplete?: (log: WorkflowLog) => void;
+  initialPrompt?: string;
+  onPromptHandled?: () => void;
 }
 
 const nodeTypes = {
   custom: WorkflowNode,
 };
 
-const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig }) => {
+const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig, onWorkflowComplete, initialPrompt, onPromptHandled }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [userPrompt, setUserPrompt] = useState("");
-  const [consoleLog, setConsoleLog] = useState<string[]>(["Orchestrator v2.0 online. Ready for complex logic."]);
+  const [consoleLog, setConsoleLog] = useState<string[]>(["Orchestrator v2.1 online. Ready for complex logic."]);
+  
+  // Ref for auto-scrolling logs
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   // --- MODAL STATE ---
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -64,6 +66,90 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     // Remove ```html ... ``` or just ``` ... ``` wrapper
     return text.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/, '');
   };
+
+  // Helper to render markdown-ish text nicely
+  const renderFormattedOutput = (text: any) => {
+    if (typeof text !== 'string') {
+        // If it's an object/json, pretty print it
+        return <pre className="font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{JSON.stringify(text, null, 2)}</pre>;
+    }
+
+    const cleanText = cleanAIOutput(text);
+    
+    // If it looks like HTML, render it as HTML
+    if (cleanText.trim().startsWith('<') || cleanText.includes('</') || cleanText.includes('</div>')) {
+        return <div dangerouslySetInnerHTML={{ __html: cleanText }} />;
+    }
+
+    // Otherwise, parse simple markdown
+    const lines = cleanText.split('\n');
+    
+    // Inline formatter
+    const processInline = (str: string) => {
+        const parts = str.split(/(\*\*.*?\*\*|\*.*?\*|`.*?`)/g);
+        return parts.map((part, i) => {
+            if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} className="font-black text-inherit">{part.slice(2, -2)}</strong>;
+            if (part.startsWith('*') && part.endsWith('*')) return <em key={i} className="italic text-inherit">{part.slice(1, -1)}</em>;
+            if (part.startsWith('`') && part.endsWith('`')) return <code key={i} className="bg-gray-200 dark:bg-zinc-700 px-1 rounded font-mono text-[90%]">{part.slice(1, -1)}</code>;
+            return part;
+        });
+    };
+
+    return (
+        <div className="space-y-3 text-gray-800 dark:text-gray-200">
+            {lines.map((line, idx) => {
+                const trimmed = line.trim();
+                if (!trimmed) return <div key={idx} className="h-2"></div>;
+
+                // Headers
+                if (trimmed.startsWith('#')) {
+                    const level = trimmed.match(/^#+/)?.[0].length || 1;
+                    const content = trimmed.replace(/^#+\s*/, '');
+                    const sizeClass = level === 1 ? 'text-xl border-b-2 border-gray-200 pb-1 mt-4' : 'text-lg mt-3';
+                    return <h3 key={idx} className={`${sizeClass} font-black text-gray-900 dark:text-white`}>{processInline(content)}</h3>;
+                }
+
+                // Bullets
+                if (trimmed.match(/^[-*•]\s/)) {
+                    return (
+                        <div key={idx} className="flex gap-2 items-start ml-4">
+                            <span className="text-blue-500 mt-1.5 text-[6px]">●</span>
+                            <p className="leading-relaxed">{processInline(trimmed.replace(/^[-*•]\s+/, ''))}</p>
+                        </div>
+                    );
+                }
+
+                // Numbered
+                if (trimmed.match(/^\d+\.\s/)) {
+                     const num = trimmed.match(/^\d+/)?.[0];
+                     return (
+                        <div key={idx} className="flex gap-2 items-start ml-4">
+                            <span className="font-bold text-gray-500">{num}.</span>
+                            <p className="leading-relaxed">{processInline(trimmed.replace(/^\d+\.\s/, ''))}</p>
+                        </div>
+                     );
+                }
+
+                return <p key={idx} className="leading-relaxed">{processInline(trimmed)}</p>;
+            })}
+        </div>
+    );
+  };
+
+  // Scroll logs to bottom
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [consoleLog]);
+
+  // Handle Initial Prompt (Re-run logic)
+  useEffect(() => {
+      if (initialPrompt) {
+          setUserPrompt(initialPrompt);
+          // If the 'start' node exists, update its output too
+          updateNodeData('start', { output: initialPrompt });
+          if (onPromptHandled) onPromptHandled();
+      }
+  }, [initialPrompt, onPromptHandled]);
 
   // Initial Nodes
   useEffect(() => {
@@ -97,7 +183,8 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
         CONTEXT FROM PREVIOUS STEPS:
         ${context}
         
-        Perform the task and provide the output. If generating code or text, just provide the content.
+        Perform the task. If generating code, text, or data, provide ONLY the content. 
+        Format your response nicely with Markdown (headers, bullet points) where appropriate.
       `;
 
       if (aiConfig.provider === 'openai') {
@@ -188,7 +275,14 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
         // Start
         newNodes.push({ 
             id: 'start', type: 'custom', position: { x: 250, y: 0 }, 
-            data: { label: 'Start', role: 'Trigger', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Start', status: 'Ready', onConfig: handleNodeConfig, output: userPrompt } 
+            data: { 
+                    label: 'Start Trigger', 
+                    role: 'System', 
+                    avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=System', 
+                    color: '#000',
+                    onConfig: handleNodeConfig,
+                    status: 'Ready'
+                } 
         });
 
         steps.forEach((step, index) => {
@@ -207,7 +301,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                 }
             });
             const sourceId = index === 0 ? 'start' : `step-${index-1}`;
-            newEdges.push({ id: `e-${index}`, source: sourceId, target: nodeId, animated: true, style: { stroke: 'black', strokeWidth: 3 } });
+            newEdges.push({ id: `e-${index}`, source: sourceId, target: nodeId, animated: true });
         });
 
         // End
@@ -216,12 +310,13 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
             id: 'end', type: 'custom', position: { x: 250, y: (steps.length + 1) * 150 },
             data: { label: 'Complete', role: 'Output', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Done', status: 'Pending', onConfig: handleNodeConfig }
         });
-        newEdges.push({ id: `e-end`, source: lastStepId, target: 'end', style: { stroke: 'black', strokeWidth: 3 } });
+        newEdges.push({ id: `e-end`, source: lastStepId, target: 'end' });
 
         setNodes(newNodes);
         setEdges(newEdges);
         setConsoleLog(prev => [...prev, "✨ Workflow structure generated."]);
-        setUserPrompt("");
+        // Note: We don't clear userPrompt here immediately if using rerun logic, 
+        // but for fresh generation it's fine.
 
     } catch (e: any) {
         setConsoleLog(prev => [...prev, `⚠️ Error: ${e.message}`]);
@@ -237,7 +332,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
 
     const startNode = { 
         id: 'start', type: 'custom', position: { x: 250, y: 0 }, 
-        data: { label: 'User Input', role: 'Trigger', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Input', status: 'Waiting', onConfig: handleNodeConfig, output: userPrompt || "General Topic" } 
+        data: { label: 'User Input', role: 'Trigger', avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Input', status: 'Waiting', onConfig: handleNodeConfig, output: userPrompt || "Topic: Technology" } 
     };
 
     const makeNode = (id: string, x: number, y: number, agentType: string, label: string, instructions: string) => {
@@ -256,28 +351,28 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     if (templateId === 1) { // News
         newNodes = [
             startNode,
-            makeNode('n1', 250, 150, 'news', 'Fetch Trends', 'Search for the top 3 trending news stories related to the input topic. Provide a concise summary for each.'),
-            makeNode('n2', 250, 300, 'writer', 'Digest', 'Rewrite the provided news summaries into a fun, easy-to-read "Morning Digest" format. Use emojis.'),
+            makeNode('n1', 250, 150, 'news', 'Fetch Trends', 'Search for trending news stories related to the input topic.\n\nCRITICAL INSTRUCTION: If the user input specifies a quantity (e.g., "10 items", "2 stories"), YOU MUST FETCH EXACTLY THAT AMOUNT. If no quantity is specified, default to 5 items.\n\nFor each item, provide:\n- Headline\n- Concise Summary\n- Source Link'),
+            makeNode('n2', 250, 300, 'writer', 'Digest', 'Review the raw news data. Rewrite it into a polished "Morning Digest" format. Use emojis, bold headlines, and ensure the tone is engaging and professional. Preserve all source links.'),
             makeEndNode(250, 450)
         ];
         newEdges = [{id:'e1', source:'start', target:'n1'}, {id:'e2', source:'n1', target:'n2'}, {id:'e3', source:'n2', target:'end'}];
-        setConsoleLog(prev => [...prev, "Loaded: 📰 News Briefing"]);
+        setConsoleLog(prev => [...prev, "Loaded: 📰 News Briefing (Smart Count)"]);
     } else if (templateId === 2) { // Code
         newNodes = [
             startNode,
-            makeNode('n1', 250, 150, 'researcher', 'Tech Spec', 'Analyze the user request and create a bulleted technical requirement list for a Typescript implementation.'),
-            makeNode('n2', 250, 300, 'coder', 'Implementation', 'Write clean, commented Typescript code based on the technical requirements provided. Do not use markdown blocks, just raw code.'),
+            makeNode('n1', 250, 150, 'researcher', 'Tech Spec', 'Analyze the user request. Create a detailed technical requirement list (bullet points). Include edge cases, data structures, and potential security considerations.'),
+            makeNode('n2', 250, 300, 'coder', 'Implementation', 'Write clean, production-ready Typescript code based on the technical spec. Include JSDoc comments. Do not wrap in markdown code blocks if possible, just the raw code text.'),
             makeEndNode(250, 450)
         ];
         newEdges = [{id:'e1', source:'start', target:'n1'}, {id:'e2', source:'n1', target:'n2'}, {id:'e3', source:'n2', target:'end'}];
-        setConsoleLog(prev => [...prev, "Loaded: 🏭 Code Factory"]);
+        setConsoleLog(prev => [...prev, "Loaded: 🏭 Code Factory (Robust)"]);
     } else if (templateId === 4) { // Premium Blog
         newNodes = [
             startNode,
-            makeNode('n1', 250, 150, 'researcher', 'SEO Research', 'Identify 5 high-traffic keywords and 3 sub-topics related to the input. Provide a target audience persona.'),
-            makeNode('n2', 250, 300, 'writer', 'Outline', 'Create a detailed blog post outline with H2 and H3 headers based on the SEO research.'),
-            makeNode('n3', 250, 450, 'writer', 'Drafting', 'Write the full blog post based on the outline. Ensure the tone is engaging and professional.'),
-            makeNode('n4', 250, 600, 'designer', 'Formatting', 'Wrap the blog post in beautiful HTML with Tailwind CSS classes for typography. Add <div> placeholders for images.'),
+            makeNode('n1', 250, 150, 'researcher', 'SEO Research', 'Analyze the topic. Identify 5 high-traffic keywords, 3 sub-topics, and a target audience persona to guide the writing.'),
+            makeNode('n2', 250, 300, 'writer', 'Outline', 'Create a structured outline with H1, H2, and H3 headers based on the SEO research. Include bullet points for key arguments in each section.'),
+            makeNode('n3', 250, 450, 'writer', 'Drafting', 'Write the full blog post based on the outline. Tone: Professional yet accessible. Length: Comprehensive.'),
+            makeNode('n4', 250, 600, 'designer', 'Formatting', 'Wrap the blog post in semantic HTML with inline CSS or Tailwind classes for styling. Add placeholder <img> tags where visual interest is needed.'),
             makeEndNode(250, 750)
         ];
         newEdges = [{id:'e1', source:'start', target:'n1'}, {id:'e2', source:'n1', target:'n2'}, {id:'e3', source:'n2', target:'n3'}, {id:'e4', source:'n3', target:'n4'}, {id:'e5', source:'n4', target:'end'}];
@@ -285,8 +380,8 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     } else { // Creative
         newNodes = [
             startNode,
-            makeNode('n1', 250, 150, 'designer', 'Visual Concept', 'Describe a visual style, color palette, and mood board for the input idea.'),
-            makeNode('n2', 250, 300, 'writer', 'Copy', 'Write a catchy tagline and a short paragraph of marketing copy matching the visual style.'),
+            makeNode('n1', 250, 150, 'designer', 'Visual Concept', 'Describe a distinct visual style, color palette (with hex codes), and typography choices for the input idea. Create a mood board description.'),
+            makeNode('n2', 250, 300, 'writer', 'Copy', 'Write 5 catchy taglines and a short "About Us" paragraph that perfectly matches the described visual style.'),
             makeEndNode(250, 450)
         ];
         newEdges = [{id:'e1', source:'start', target:'n1'}, {id:'e2', source:'n1', target:'n2'}, {id:'e3', source:'n2', target:'end'}];
@@ -294,7 +389,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     }
 
     // Style edges
-    newEdges = newEdges.map(e => ({ ...e, animated: true, style: { stroke: 'black', strokeWidth: 3 } }));
+    newEdges = newEdges.map(e => ({ ...e, animated: true }));
     setNodes(newNodes);
     setEdges(newEdges);
   };
@@ -304,6 +399,9 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     if (nodes.length === 0) return;
     setIsRunning(true);
     setConsoleLog(prev => [...prev, "🚀 Starting execution sequence..."]);
+
+    // Track workflow steps for logs
+    let workflowSteps: { agentName: string; role: string; status: string }[] = [];
 
     // 1. Get Initial Input from Start Node or User Prompt
     // If Start node has no output set, use userPrompt
@@ -315,7 +413,9 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
         data: { 
             ...n.data, 
             status: n.id === 'start' ? 'Ready' : 'Waiting',
-            output: n.id === 'start' ? currentContext : null 
+            output: n.id === 'start' ? currentContext : null,
+            inputData: null,
+            sourceNodeId: null
         } 
     })));
 
@@ -325,6 +425,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
         
         let currentNodeId = 'start';
         let steps = 0;
+        let finalStatus: 'success' | 'failed' | 'partial' = 'partial';
         
         // Safety loop break
         while (steps < 10) {
@@ -337,15 +438,28 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
 
             if (nextNode.id === 'end') {
                 // Final Step
-                updateNodeData('end', { status: 'Complete ✅', output: { type: 'html', title: 'Workflow Result', content: currentContext } });
+                updateNodeData('end', { 
+                    status: 'Complete ✅', 
+                    output: { type: 'html', title: 'Workflow Result', content: currentContext },
+                    inputData: currentContext, // Capture final input
+                    sourceNodeId: currentNodeId
+                });
                 setConsoleLog(prev => [...prev, "🏁 Workflow Complete!"]);
+                finalStatus = 'success';
                 break;
             }
 
             // Processing Node
             const nodeName = nextNode.data.label;
+            const nodeRole = nextNode.data.role;
             setConsoleLog(prev => [...prev, `▶️ activating ${nodeName}...`]);
-            updateNodeData(nextNode.id, { status: 'Processing... ⏳' });
+            
+            // CAPTURE INPUT HERE: Save 'currentContext' as inputData for this node
+            updateNodeData(nextNode.id, { 
+                status: 'Processing... ⏳',
+                inputData: currentContext, 
+                sourceNodeId: currentNodeId
+            });
 
             // EXECUTE AI
             try {
@@ -358,20 +472,50 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                 currentContext = result; // Pass forward
                 updateNodeData(nextNode.id, { status: 'Done ✅', output: result });
                 setConsoleLog(prev => [...prev, `✅ ${nodeName} finished.`]);
+                
+                workflowSteps.push({
+                  agentName: nodeName,
+                  role: nodeRole,
+                  status: 'Completed successfully'
+                });
 
             } catch (err: any) {
                 console.error(err);
                 updateNodeData(nextNode.id, { status: 'Error ❌' });
                 setConsoleLog(prev => [...prev, `❌ Error in ${nodeName}: ${err.message}`]);
+                workflowSteps.push({
+                  agentName: nodeName,
+                  role: nodeRole,
+                  status: 'Failed'
+                });
                 // On 429, we might want to pause or simulate, but here we break
                 if (err.message?.includes('429')) {
                      setConsoleLog(prev => [...prev, "⚠️ Quota Hit. Stopping."]);
                 }
+                finalStatus = 'failed';
                 break;
             }
 
             currentNodeId = nextNode.id;
             steps++;
+        }
+
+        // --- SAVE WORKFLOW LOG ---
+        if (onWorkflowComplete) {
+          const log: WorkflowLog = {
+            id: `wf-${Date.now()}`,
+            title: `Workflow: ${userPrompt || 'Custom Run'}`,
+            timestamp: new Date().toLocaleString(),
+            status: finalStatus,
+            steps: workflowSteps,
+            output: {
+              type: 'html', // Assuming mostly text/html return
+              title: 'Final Workflow Output',
+              content: currentContext
+            }
+          };
+          onWorkflowComplete(log);
+          setConsoleLog(prev => [...prev, "💾 Log saved to Mission Control."]);
         }
 
     } catch (e) {
@@ -381,9 +525,13 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
     }
   };
 
-  const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true, style: { stroke: 'black', strokeWidth: 3 } }, eds)), [setEdges]);
+  const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge({ ...connection, animated: true }, eds)), [setEdges]);
 
   // Derived state for modal rendering
+  // Resolve source node for "Connection Dynamics"
+  const inputSourceNode = nodes.find(n => n.id === selectedNode?.data.sourceNodeId);
+
+  // Content Helpers
   let modalContentToRender = selectedNode?.data.output;
   if (selectedNodeId === 'end' && selectedNode?.data.output?.content) {
       modalContentToRender = selectedNode.data.output.content;
@@ -391,10 +539,6 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
       modalContentToRender = selectedNode.data.output;
   }
   
-  // Clean content if it's a string
-  const cleanContent = cleanAIOutput(typeof modalContentToRender === 'string' ? modalContentToRender : modalContentToRender?.content || "");
-  const isHtmlContent = typeof cleanContent === 'string' && (cleanContent.trim().startsWith('<') || cleanContent.includes('</') || cleanContent.includes('</div>'));
-
   return (
     <div className="h-full flex flex-col md:flex-row gap-6 animate-in fade-in zoom-in-95 duration-500 relative">
       
@@ -430,6 +574,22 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                <span className="font-black text-green-800 dark:text-green-200 uppercase">Workflow Output Generated</span>
                            </div>
 
+                            {/* Data Lineage for End Node */}
+                            {inputSourceNode && (
+                                <div className="bg-blue-50 dark:bg-zinc-800/50 border-2 border-dashed border-blue-300 dark:border-blue-700 rounded-xl p-3 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full border border-black dark:border-white overflow-hidden">
+                                            <img src={inputSourceNode.data.avatarUrl} className="w-full h-full object-cover" alt="source" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase text-blue-500">Result received from</p>
+                                            <p className="text-xs font-bold text-gray-800 dark:text-white">{inputSourceNode.data.label}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-2xl">➡️</div>
+                                </div>
+                            )}
+
                            <div className="bg-white dark:bg-zinc-800 border-4 border-black dark:border-white rounded-xl overflow-hidden shadow-sm">
                                <div className="bg-gray-100 dark:bg-zinc-700 border-b-2 border-black dark:border-white p-2 flex gap-2">
                                    <div className="w-3 h-3 rounded-full bg-red-400 border border-black"></div>
@@ -441,18 +601,54 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                </div>
                                
                                <div className="p-6 prose dark:prose-invert max-w-none font-fredoka">
-                                    {/* Render HTML content safely if it's from Premium Blog, otherwise text */}
-                                   {isHtmlContent ? (
-                                       <div dangerouslySetInnerHTML={{ __html: cleanContent }} />
-                                   ) : (
-                                       <pre className="whitespace-pre-wrap font-sans text-sm">{cleanContent || JSON.stringify(selectedNode.data.output, null, 2)}</pre>
-                                   )}
+                                    {renderFormattedOutput(modalContentToRender)}
                                </div>
                            </div>
                        </div>
                    ) : (
                        /* CONFIG / INSTRUCTION VIEW */
                        <div className="space-y-6">
+                            
+                            {/* DYNAMIC CONNECTION DISPLAY */}
+                            {inputSourceNode && (
+                                <div className="bg-purple-50 dark:bg-zinc-800 border-2 border-purple-200 dark:border-purple-900 rounded-2xl p-4 relative">
+                                    <div className="absolute -top-3 left-4 bg-purple-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-black dark:border-white">
+                                        Input Stream
+                                    </div>
+                                    
+                                    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full border border-black dark:border-white bg-white overflow-hidden">
+                                                <img src={inputSourceNode.data.avatarUrl} className="w-full h-full object-cover" alt="source" />
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] font-black uppercase text-purple-400">Source</p>
+                                                <p className="text-xs font-bold text-gray-900 dark:text-white">{inputSourceNode.data.label}</p>
+                                            </div>
+                                        </div>
+                                        <div className="hidden md:block text-purple-300 text-xl">----------►</div>
+                                        <div className="bg-white dark:bg-black px-3 py-1 rounded-lg border border-purple-100 dark:border-purple-900/50">
+                                            <p className="text-[10px] font-black uppercase text-purple-400 text-center">Data Payload</p>
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 font-mono max-w-[150px] truncate">
+                                                {typeof selectedNode.data.inputData === 'string' 
+                                                    ? selectedNode.data.inputData.substring(0, 30) + "..." 
+                                                    : "Object Data"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Collapsible/Expandable Input Preview */}
+                                    <details className="group">
+                                        <summary className="text-[10px] font-black uppercase text-gray-400 cursor-pointer hover:text-purple-500 transition-colors list-none flex items-center gap-1">
+                                            <span className="group-open:rotate-90 transition-transform">▶</span> View Full Input
+                                        </summary>
+                                        <div className="mt-2 bg-white dark:bg-zinc-900 p-3 rounded-xl border border-gray-200 dark:border-zinc-700 text-xs font-mono max-h-32 overflow-y-auto text-gray-600 dark:text-gray-300">
+                                            {typeof selectedNode.data.inputData === 'string' ? selectedNode.data.inputData : JSON.stringify(selectedNode.data.inputData, null, 2)}
+                                        </div>
+                                    </details>
+                                </div>
+                            )}
+
                             {/* Input Prompt Config */}
                             <div className="bg-white dark:bg-zinc-800 border-4 border-black dark:border-white p-5 rounded-2xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]">
                                 <h4 className="font-black uppercase text-sm mb-4 border-b-2 border-dashed border-gray-300 pb-2 dark:text-white">Node Configuration</h4>
@@ -462,7 +658,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                          <div>
                                             <label className="block text-xs font-bold uppercase mb-1 text-gray-500">Initial User Request</label>
                                             <textarea 
-                                                className="w-full border-2 border-black dark:border-white rounded-xl p-2 font-bold text-sm h-24 resize-none dark:bg-zinc-700 dark:text-white"
+                                                className="w-full border-2 border-black dark:border-white rounded-xl p-2 font-bold h-24 resize-none dark:bg-zinc-700 dark:text-white text-base md:text-sm"
                                                 value={userPrompt}
                                                 onChange={(e) => {
                                                     setUserPrompt(e.target.value);
@@ -479,7 +675,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                             type="text" 
                                             value={selectedNode.data.label} 
                                             onChange={(e) => updateNodeData(selectedNode.id, { label: e.target.value })}
-                                            className="w-full border-2 border-black dark:border-white rounded-xl p-2 font-bold text-sm dark:bg-zinc-700 dark:text-white" 
+                                            className="w-full border-2 border-black dark:border-white rounded-xl p-2 font-bold dark:bg-zinc-700 dark:text-white text-base md:text-sm" 
                                         />
                                     </div>
                                     
@@ -490,7 +686,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                                 <span className="text-[9px] bg-blue-100 text-blue-600 px-2 rounded-full font-bold">PROMPT ENGINEERING</span>
                                             </div>
                                             <textarea 
-                                                className="w-full border-2 border-black dark:border-white rounded-xl p-3 font-bold text-xs h-40 resize-none dark:bg-zinc-700 dark:text-white leading-relaxed focus:ring-4 ring-yellow-200 focus:outline-none" 
+                                                className="w-full border-2 border-black dark:border-white rounded-xl p-3 font-bold h-40 resize-none dark:bg-zinc-700 dark:text-white leading-relaxed focus:ring-4 ring-yellow-200 focus:outline-none text-base md:text-xs" 
                                                 placeholder="Enter specific instructions for this agent..."
                                                 value={selectedNode.data.instructions || ""}
                                                 onChange={(e) => updateNodeData(selectedNode.id, { instructions: e.target.value })}
@@ -506,7 +702,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                                 <div className="bg-white dark:bg-zinc-800 border-4 border-black dark:border-white p-5 rounded-2xl shadow-sm opacity-90">
                                      <h4 className="font-black uppercase text-xs mb-2 text-gray-500">Last Run Output</h4>
                                      <div className="bg-gray-100 dark:bg-zinc-900 p-3 rounded-xl max-h-40 overflow-y-auto text-xs font-mono text-gray-600 dark:text-gray-300">
-                                         {cleanContent}
+                                         {renderFormattedOutput(modalContentToRender)}
                                      </div>
                                 </div>
                             )}
@@ -555,7 +751,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                       updateNodeData('start', { output: e.target.value });
                   }}
                   placeholder="Describe your workflow... (e.g., 'Analyze crypto trends')"
-                  className="w-full h-20 p-2 text-xs border-2 border-black dark:border-white rounded-xl bg-gray-50 dark:bg-zinc-700 focus:outline-none focus:ring-2 ring-purple-300 dark:text-white resize-none font-bold"
+                  className="w-full h-20 p-2 border-2 border-black dark:border-white rounded-xl bg-gray-50 dark:bg-zinc-700 focus:outline-none focus:ring-2 ring-purple-300 dark:text-white resize-none font-bold text-base md:text-xs"
                />
                <button 
                   onClick={generateWorkflowStructure}
@@ -579,7 +775,7 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
 
         <div className="bg-blue-100 dark:bg-zinc-900 border-4 border-black dark:border-white wobbly-border p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] flex-1 flex flex-col">
             <h3 className="text-sm font-black uppercase text-gray-900 dark:text-white mb-3 underline decoration-blue-400">Workflow Templates</h3>
-            <div className="space-y-2 overflow-y-auto pr-2 pl-1 py-2 no-scrollbar">
+            <div className="space-y-2 overflow-y-auto pr-2 pl-1 py-2 no-scrollbar flex-1 min-h-[100px]">
                 <button onClick={() => loadTemplate(4)} className="w-full text-left p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-white rounded-xl text-xs font-black shadow-sm hover:-translate-y-1 transition-transform text-gray-900 dark:text-white group relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     💎 Premium Blog Generator
@@ -595,13 +791,17 @@ const OrchestratorView: React.FC<OrchestratorViewProps> = ({ agents, aiConfig })
                 </button>
             </div>
             
-            <div className="mt-4 pt-4 border-t-2 border-dashed border-black dark:border-gray-600 flex-1">
-                 <h3 className="text-[10px] font-black uppercase text-gray-500 mb-2">System Logs</h3>
-                 <div className="h-full max-h-[150px] overflow-y-auto font-mono text-[10px] bg-black dark:bg-black/50 text-green-400 p-2 rounded-lg">
+            <div className="mt-auto pt-4 border-t-2 border-dashed border-black dark:border-gray-600">
+                 <div className="flex justify-between items-end mb-2">
+                    <h3 className="text-[10px] font-black uppercase text-gray-500 dark:text-gray-400">System Logs</h3>
+                    <span className="text-[8px] font-bold text-green-600 dark:text-green-400 animate-pulse">● LIVE</span>
+                 </div>
+                 <div className="h-32 overflow-y-auto font-mono text-[10px] bg-black text-green-400 p-3 rounded-xl border-2 border-gray-700 shadow-inner custom-scrollbar relative">
                      {consoleLog.map((log, i) => (
-                         <div key={i} className="mb-1">{`> ${log}`}</div>
+                         <div key={i} className="mb-1 break-words leading-tight">{`> ${log}`}</div>
                      ))}
                      {isRunning && <div className="animate-pulse">_</div>}
+                     <div ref={logsEndRef} />
                  </div>
             </div>
         </div>

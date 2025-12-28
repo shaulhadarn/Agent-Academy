@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Agent, AgentType } from '../types';
 
@@ -15,7 +16,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onAdd }) => {
   const getDefaultsForType = (type: AgentType) => {
     switch (type) {
       case 'coder': 
-        return ["Review this code 🐛", "Generate Unit Tests 🧪", "Explain concept 💡"];
+        return ["Build Landing Page 🚀", "Generate Unit Tests 🧪", "Explain concept 💡"];
       case 'news':
         return ["Latest Tech News 🗞️", "Summarize Trends 📉", "Fact Check 🔍"];
       case 'writer':
@@ -64,7 +65,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onAdd }) => {
               type="text" 
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-4 ring-blue-300 font-bold dark:text-white"
+              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-4 ring-blue-300 font-bold dark:text-white text-base md:text-sm"
               placeholder="e.g. Proto-1"
             />
           </div>
@@ -75,7 +76,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onAdd }) => {
               <select 
                 value={type}
                 onChange={(e) => setType(e.target.value as AgentType)}
-                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-sm dark:text-white"
+                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-base md:text-sm dark:text-white"
               >
                 <option value="researcher">Researcher 🧠</option>
                 <option value="coder">Coder 💻</option>
@@ -90,7 +91,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onAdd }) => {
                 type="text" 
                 value={version}
                 onChange={(e) => setVersion(e.target.value)}
-                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-sm dark:text-white"
+                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-base md:text-sm dark:text-white"
               />
             </div>
           </div>
@@ -101,7 +102,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onAdd }) => {
               type="text" 
               value={specialty}
               onChange={(e) => setSpecialty(e.target.value)}
-              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold dark:text-white"
+              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold dark:text-white text-base md:text-sm"
               placeholder="e.g. Data Crunching"
             />
           </div>

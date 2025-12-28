@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Agent, AgentTask, SystemUpgrade, AIConfig } from './types';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { Agent, AgentTask, SystemUpgrade, AIConfig, WorkflowLog } from './types';
 import Header from './components/Header';
 import AgentSelector from './components/AgentSelector';
 import Dashboard from './components/Dashboard';
@@ -9,6 +10,7 @@ import UpgradesView from './components/UpgradesView';
 import SettingsView from './components/SettingsView';
 import GlobalChat from './components/GlobalChat';
 import OrchestratorView from './components/OrchestratorView';
+import OnboardingModal from './components/OnboardingModal';
 
 const INITIAL_AGENTS: Agent[] = [
   {
@@ -21,7 +23,7 @@ const INITIAL_AGENTS: Agent[] = [
     color: '#03A9F4',
     capabilities: ['Logic Juggling', 'Bug Squashing', 'Coffee Processing'],
     catchphrase: "I don't have bugs, I have unplanned features!",
-    quickCommands: ["Review this code for bugs 🐛", "Write a Unit Test 🧪", "Explain this concept 💡"]
+    quickCommands: ["Build Landing Page 🚀", "Review this code 🐛", "Explain this concept 💡"]
   },
   {
     id: 'news-agent',
@@ -55,9 +57,9 @@ const INITIAL_AGENTS: Agent[] = [
     specialty: 'Pixel Perfection',
     avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=Glitch',
     color: '#FF9800',
-    capabilities: ['Hex-code Dreaming', 'Vector Stretching', 'Aesthetic Tuning'],
+    capabilities: ['Hex-code Dreaming', 'Vector Stretching', 'Aesthetic Tuning', 'Image Generation'],
     catchphrase: "Everything looks better with a drop shadow.",
-    quickCommands: ["Suggest a color palette 🎨", "Critique this UI layout 📐", "Generate logo concepts 🖼️"]
+    quickCommands: ["Generate a pixel art character 👾", "Suggest a color palette 🎨", "Critique this UI layout 📐"]
   },
   {
     id: '4',
@@ -83,6 +85,39 @@ const INITIAL_TASKS: AgentTask[] = [
   { id: 't7', agentId: '4', title: 'Heuristic Review', type: 'processing', priority: 'low', completed: true },
 ];
 
+const INITIAL_WORKFLOWS: WorkflowLog[] = [
+  {
+    id: 'w1',
+    title: 'Morning News Briefing',
+    timestamp: 'Today, 8:00 AM',
+    status: 'success',
+    steps: [
+      { agentName: 'Nova', role: 'NEWS', status: 'Found 10 articles' },
+      { agentName: 'Inkwell', role: 'WRITER', status: 'Summarized content' }
+    ],
+    output: {
+      type: 'html',
+      title: 'Daily Digest',
+      content: '<h3>Good Morning!</h3><p>Here is your daily dose of sunshine and tech news...</p>'
+    }
+  },
+  {
+    id: 'w2',
+    title: 'Crypto Market Analysis',
+    timestamp: 'Yesterday, 4:30 PM',
+    status: 'success',
+    steps: [
+      { agentName: 'Zetta', role: 'RESEARCHER', status: 'Analyzed trends' },
+      { agentName: 'Sparky', role: 'CODER', status: 'Generated chart data' }
+    ],
+    output: {
+      type: 'text',
+      title: 'Market Report',
+      content: 'Market is volatile. Suggest HODLing onto your digital hats.'
+    }
+  }
+];
+
 const INITIAL_UPGRADES: SystemUpgrade[] = [
   { id: 'u1', agentId: '1', title: 'Kernel Patch', date: 'Oct 31, 2025', component: 'Logic Engine' },
   { id: 'u2', agentId: '3', title: 'GPU Booster', date: 'Nov 05, 2025', component: 'Visual Processor' },
@@ -93,15 +128,35 @@ type ViewState = 'home' | 'tasks' | 'upgrades' | 'settings' | 'chat' | 'orchestr
 
 const AI_CONFIG_KEY = 'agent_academy_config_v1';
 const THEME_KEY = 'agent_academy_theme_v1';
+const WORKFLOW_LOGS_KEY = 'agent_academy_workflows_v1';
+const ONBOARDING_KEY = 'agent_academy_has_seen_onboarding';
 
 const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [selectedAgentId, setSelectedAgentId] = useState<string>(INITIAL_AGENTS[0].id);
   const [tasks, setTasks] = useState<AgentTask[]>(INITIAL_TASKS);
+  const [workflowLogs, setWorkflowLogs] = useState<WorkflowLog[]>(() => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem(WORKFLOW_LOGS_KEY);
+        if (saved) {
+            try { return JSON.parse(saved); } catch (e) {}
+        }
+    }
+    return INITIAL_WORKFLOWS;
+  });
+
   const [upgrades, setUpgrades] = useState<SystemUpgrade[]>(INITIAL_UPGRADES);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<ViewState>('home');
   
+  // Onboarding State
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<ViewState>('home');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [orchestratorPrompt, setOrchestratorPrompt] = useState("");
+  
+  const mainContentRef = useRef<HTMLElement>(null);
+
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -130,6 +185,31 @@ const App: React.FC = () => {
     };
   });
 
+  // Check for onboarding on first load
+  useEffect(() => {
+    const hasSeen = localStorage.getItem(ONBOARDING_KEY);
+    if (!hasSeen) {
+        setIsOnboardingOpen(true);
+    }
+  }, []);
+
+  const handleCloseOnboarding = () => {
+      setIsOnboardingOpen(false);
+      localStorage.setItem(ONBOARDING_KEY, 'true');
+  };
+
+  const handleStartOnboarding = () => {
+      setIsOnboardingOpen(true);
+  };
+
+  // Scroll to top on tab change
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTop = 0;
+    }
+    window.scrollTo(0, 0);
+  }, [activeTab]);
+
   // Save AI Config to LocalStorage whenever it changes
   useEffect(() => {
     localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(aiConfig));
@@ -140,14 +220,15 @@ const App: React.FC = () => {
     localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
+  // Save Workflow Logs
+  useEffect(() => {
+    localStorage.setItem(WORKFLOW_LOGS_KEY, JSON.stringify(workflowLogs));
+  }, [workflowLogs]);
+
   const activeAgent = agents.find(a => a.id === selectedAgentId) || agents[0];
 
   const handleToggleTask = (taskId: string) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
-  };
-
-  const handleAddTask = (task: AgentTask) => {
-    setTasks(prev => [...prev, task]);
   };
 
   const handleAddAgent = (newAgent: Agent) => {
@@ -158,6 +239,33 @@ const App: React.FC = () => {
 
   const handleUpdateAgent = (updatedAgent: Agent) => {
     setAgents(prev => prev.map(a => a.id === updatedAgent.id ? updatedAgent : a));
+  };
+
+  const handleWorkflowComplete = (log: WorkflowLog) => {
+      setWorkflowLogs(prev => [log, ...prev]);
+  };
+
+  // --- WORKFLOW LOG HANDLERS ---
+  const handleClearLogs = () => {
+    if (window.confirm("Are you sure you want to delete all mission history?")) {
+      setWorkflowLogs([]);
+    }
+  };
+
+  const handleDeleteLog = (id: string) => {
+    if (window.confirm("Delete this mission record?")) {
+      setWorkflowLogs(prev => prev.filter(l => l.id !== id));
+    }
+  };
+
+  const handleRerunLog = (log: WorkflowLog) => {
+      // Try to extract the prompt from the title "Workflow: [Prompt]"
+      const prompt = log.title.startsWith('Workflow: ') 
+        ? log.title.replace('Workflow: ', '') 
+        : log.title;
+      
+      setOrchestratorPrompt(prompt);
+      setActiveTab('orchestrator');
   };
 
   const renderActiveView = () => {
@@ -176,10 +284,10 @@ const App: React.FC = () => {
       case 'tasks':
         return (
           <TasksView 
-            agentId={selectedAgentId}
-            tasks={tasks.filter(t => t.agentId === selectedAgentId)} 
-            onToggleTask={handleToggleTask} 
-            onAddTask={handleAddTask}
+            workflowLogs={workflowLogs}
+            onClearLogs={handleClearLogs}
+            onDeleteLog={handleDeleteLog}
+            onRerunLog={handleRerunLog}
           />
         );
       case 'upgrades':
@@ -196,6 +304,7 @@ const App: React.FC = () => {
             onUpdateAiConfig={setAiConfig}
             theme={theme}
             setTheme={setTheme}
+            onStartOnboarding={handleStartOnboarding}
           />
         );
       case 'chat':
@@ -210,6 +319,9 @@ const App: React.FC = () => {
           <OrchestratorView 
             agents={agents} 
             aiConfig={aiConfig}
+            onWorkflowComplete={handleWorkflowComplete}
+            initialPrompt={orchestratorPrompt}
+            onPromptHandled={() => setOrchestratorPrompt("")}
           />
         );
       default:
@@ -247,18 +359,29 @@ const App: React.FC = () => {
         <div className="relative z-10 flex flex-col md:flex-row min-h-screen">
           
           {/* Desktop Sidebar */}
-          <nav className="hidden md:flex flex-col w-64 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm border-r-4 border-black dark:border-white h-screen sticky top-0 z-50 transition-colors duration-300">
-             <div className="p-6">
-               <div className="flex items-center gap-2 mb-8">
-                  <div className="w-10 h-10 bg-yellow-400 border-2 border-black dark:border-white rounded-full flex items-center justify-center text-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] animate-bounce-slow">
+          <nav className={`hidden md:flex flex-col bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm h-screen sticky top-0 z-50 transition-all duration-300 ease-in-out ${isSidebarOpen ? 'w-64 border-r-4 border-black dark:border-white opacity-100' : 'w-0 border-r-0 opacity-0 overflow-hidden'}`}>
+             <div className="p-6 relative">
+               {/* Collapse Button */}
+               <button 
+                 onClick={() => setIsSidebarOpen(false)}
+                 className="absolute top-2 right-2 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+                 title="Collapse Menu"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5">
+                   <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
+                 </svg>
+               </button>
+
+               <div className="flex items-center gap-2 mb-8 mt-2">
+                  <div className="w-10 h-10 flex-shrink-0 bg-yellow-400 border-2 border-black dark:border-white rounded-full flex items-center justify-center text-xl shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] animate-bounce-slow">
                     🤖
                   </div>
-                  <h1 className="text-xl font-black italic leading-none dark:text-white">Agent<br/>Academy</h1>
+                  <h1 className="text-xl font-black italic leading-none dark:text-white whitespace-nowrap">Agent<br/>Academy</h1>
                </div>
                
                <div className="space-y-2">
                   <NavButton tab="home" icon="🤖" label="Dashboard" />
-                  <NavButton tab="tasks" icon="⚡" label="Missions" />
+                  <NavButton tab="tasks" icon="📜" label="Logs" />
                   <NavButton tab="chat" icon="💬" label="Council" />
                   <NavButton tab="orchestrator" icon="🎼" label="Orchestrator" />
                   <NavButton tab="upgrades" icon="🛰️" label="Upgrades" />
@@ -266,7 +389,7 @@ const App: React.FC = () => {
                </div>
              </div>
 
-             <div className="mt-auto p-6 border-t-2 border-dashed border-gray-300 dark:border-zinc-700">
+             <div className="mt-auto p-6 border-t-2 border-dashed border-gray-300 dark:border-zinc-700 whitespace-nowrap">
                <div className="bg-pink-100 dark:bg-zinc-800 border-2 border-black dark:border-white p-3 rounded-2xl shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)]">
                   <p className="text-[10px] font-black uppercase text-pink-500 dark:text-pink-400">System Status</p>
                   <div className="flex items-center gap-2 mt-1">
@@ -278,18 +401,34 @@ const App: React.FC = () => {
           </nav>
 
           {/* Main Content Area */}
-          <main className="flex-1 flex flex-col h-full max-h-screen overflow-y-auto">
-            <div className="p-4 md:p-8 max-w-7xl mx-auto w-full pb-28 md:pb-8">
+          <main ref={mainContentRef} className="flex-1 flex flex-col h-full max-h-screen overflow-y-auto relative">
+            
+            {/* Desktop Expand Button (Visible only when sidebar is closed) */}
+            {!isSidebarOpen && (
+               <div className="hidden md:block fixed top-6 left-6 z-50 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <button 
+                    onClick={() => setIsSidebarOpen(true)} 
+                    className="bg-yellow-400 border-2 border-black dark:border-white rounded-full px-4 py-2 font-black text-xs shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] dark:shadow-[3px_3px_0px_0px_rgba(255,255,255,1)] hover:scale-105 active:scale-95 transition-all text-gray-900 flex items-center gap-2"
+                  >
+                    <span>MENU</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-3 h-3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+               </div>
+            )}
+
+            <div className="p-4 md:p-8 max-w-7xl mx-auto w-full pb-28 md:pb-8 transition-all duration-300">
               <div className="md:hidden">
                 <Header />
               </div>
 
               {/* Desktop Header for context */}
               <div className="hidden md:flex justify-between items-center mb-6">
-                 <div>
+                 <div className={`${!isSidebarOpen ? 'ml-12' : ''} transition-all duration-300`}>
                     <h2 className="text-3xl font-black italic underline decoration-yellow-400 dark:decoration-yellow-500 dark:text-white">
                       {activeTab === 'home' && 'Command Center'}
-                      {activeTab === 'tasks' && 'Mission Control'}
+                      {activeTab === 'tasks' && 'Workflow Logs'}
                       {activeTab === 'chat' && 'The Council'}
                       {activeTab === 'orchestrator' && 'Flow Studio'}
                       {activeTab === 'upgrades' && 'System Patch'}
@@ -321,11 +460,15 @@ const App: React.FC = () => {
             onAdd={handleAddAgent} 
           />
         )}
+        
+        {isOnboardingOpen && (
+            <OnboardingModal onClose={handleCloseOnboarding} />
+        )}
 
         {/* Mobile Bottom Navigation */}
         <nav className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[95%] max-w-sm h-16 bg-white dark:bg-zinc-900 border-4 border-black dark:border-white wobbly-border flex items-center justify-around z-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,1)]">
           <NavButton tab="home" icon="🤖" label="Home" />
-          <NavButton tab="tasks" icon="⚡" label="Tasks" />
+          <NavButton tab="tasks" icon="📜" label="Logs" />
           <NavButton tab="chat" icon="💬" label="Chat" />
           <NavButton tab="orchestrator" icon="🎼" label="Flow" />
           <NavButton tab="settings" icon="⚙️" label="Set" />

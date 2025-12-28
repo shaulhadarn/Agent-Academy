@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { AgentTask } from '../types';
 
@@ -43,7 +44,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ agentId, onClose, onAdd }) 
               type="text" 
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-4 ring-yellow-300 font-bold text-gray-900 dark:text-white"
+              className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none focus:ring-4 ring-yellow-300 font-bold text-gray-900 dark:text-white text-base md:text-sm"
               placeholder="e.g. Optimize Sparkles"
               autoFocus
             />
@@ -55,7 +56,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ agentId, onClose, onAdd }) 
               <select 
                 value={type}
                 onChange={(e) => setType(e.target.value as AgentTask['type'])}
-                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-sm text-gray-900 dark:text-white"
+                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-base md:text-sm text-gray-900 dark:text-white"
               >
                 <option value="processing">Processing ⚙️</option>
                 <option value="learning">Learning 🧠</option>
@@ -68,7 +69,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ agentId, onClose, onAdd }) 
               <select 
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as AgentTask['priority'])}
-                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-sm text-gray-900 dark:text-white"
+                className="w-full border-2 border-black dark:border-white rounded-2xl p-3 bg-white dark:bg-zinc-800 focus:outline-none font-bold text-base md:text-sm text-gray-900 dark:text-white"
               >
                 <option value="low">Low 💤</option>
                 <option value="medium">Medium 🎈</option>

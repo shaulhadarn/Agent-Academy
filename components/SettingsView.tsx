@@ -8,9 +8,10 @@ interface SettingsViewProps {
   onUpdateAiConfig: (config: AIConfig) => void;
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
+  onStartOnboarding: () => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAiConfig, theme, setTheme }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAiConfig, theme, setTheme, onStartOnboarding }) => {
   const [toggles, setToggles] = useState({
     cuteness: true,
     sleep: false,
@@ -123,7 +124,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAi
                 <select 
                     value={isCustomModel ? 'custom' : localAiConfig.model}
                     onChange={handleModelSelect}
-                    className="w-full border-2 border-black dark:border-zinc-500 rounded-xl p-2 font-bold text-sm focus:outline-none bg-white dark:bg-zinc-700 dark:text-white"
+                    className="w-full border-2 border-black dark:border-zinc-500 rounded-xl p-2 font-bold text-base md:text-sm focus:outline-none bg-white dark:bg-zinc-700 dark:text-white"
                 >
                     {localAiConfig.provider === 'gemini' ? (
                         <>
@@ -157,7 +158,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAi
                         handleAiConfigChange('model', e.target.value);
                     }}
                     placeholder="e.g. o3-deep-research"
-                    className="w-full border-2 border-purple-400 rounded-xl p-2 font-bold text-sm focus:outline-none bg-purple-50 dark:bg-zinc-900 text-purple-900 dark:text-purple-300 placeholder-purple-300"
+                    className="w-full border-2 border-purple-400 rounded-xl p-2 font-bold text-base md:text-sm focus:outline-none bg-purple-50 dark:bg-zinc-900 text-purple-900 dark:text-purple-300 placeholder-purple-300"
                 />
                 <p className="text-[9px] font-bold text-purple-400 mt-1">
                   * Use this for new models like o3-deep-research!
@@ -165,17 +166,33 @@ const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAi
                </div>
             )}
 
-            <div>
-                <label className="block text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 mb-1">
-                    API Key {localAiConfig.provider === 'gemini' ? '(Optional if using default env)' : '(Required)'}
-                </label>
-                <input 
-                    type="password" 
-                    value={localAiConfig.apiKey}
-                    onChange={(e) => handleAiConfigChange('apiKey', e.target.value)}
-                    placeholder={localAiConfig.provider === 'gemini' ? "Using System Default..." : "sk-..."}
-                    className="w-full border-2 border-black dark:border-zinc-500 rounded-xl p-2 font-bold text-sm focus:outline-none bg-gray-50 dark:bg-zinc-700 dark:text-white dark:placeholder-gray-500"
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 dark:text-gray-400 mb-1">
+                      LLM API Key {localAiConfig.provider === 'gemini' ? '(Optional)' : '(Required)'}
+                  </label>
+                  <input 
+                      type="password" 
+                      value={localAiConfig.apiKey}
+                      onChange={(e) => handleAiConfigChange('apiKey', e.target.value)}
+                      placeholder={localAiConfig.provider === 'gemini' ? "Using System Default..." : "sk-..."}
+                      className="w-full border-2 border-black dark:border-zinc-500 rounded-xl p-2 font-bold text-base md:text-sm focus:outline-none bg-gray-50 dark:bg-zinc-700 dark:text-white dark:placeholder-gray-500"
+                  />
+              </div>
+
+              <div>
+                  <label className="block text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 mb-1">
+                      Serper.dev API Key (Optional)
+                  </label>
+                  <input 
+                      type="password" 
+                      value={localAiConfig.serperApiKey || ''}
+                      onChange={(e) => handleAiConfigChange('serperApiKey', e.target.value)}
+                      placeholder="e855f..."
+                      className="w-full border-2 border-blue-200 dark:border-blue-800 rounded-xl p-2 font-bold text-base md:text-sm focus:outline-none bg-blue-50 dark:bg-zinc-900 text-blue-900 dark:text-white placeholder-blue-300"
+                  />
+                  <p className="text-[8px] font-bold text-blue-400 mt-1">Enables high-quality Search for ANY model.</p>
+              </div>
             </div>
 
             <button 
@@ -233,10 +250,18 @@ const SettingsView: React.FC<SettingsViewProps> = ({ agent, aiConfig, onUpdateAi
           </div>
         </div>
 
-        <div className="pt-4 border-t-2 border-black dark:border-white border-dashed">
-          <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase mb-2">Danger Zone</p>
+        <div className="pt-4 border-t-2 border-black dark:border-white border-dashed space-y-3">
+          <p className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase mb-2">Help & Support</p>
+          
+          <button 
+            onClick={onStartOnboarding}
+            className="w-full bg-blue-100 dark:bg-blue-900/40 border-2 border-black dark:border-white py-2 rounded-xl text-blue-600 dark:text-blue-300 font-black text-xs hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] active:translate-y-0.5 active:shadow-none"
+          >
+             Show Onboarding Tutorial 👋
+          </button>
+
           <button className="w-full bg-red-100 dark:bg-red-900/40 border-2 border-black dark:border-white py-2 rounded-xl text-red-600 dark:text-red-400 font-black text-xs hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] dark:shadow-[2px_2px_0px_0px_rgba(255,255,255,1)] active:translate-y-0.5 active:shadow-none">
-            WIPE NEURAL CACHE
+            WIPE NEURAL CACHE ⚠️
           </button>
         </div>
       </div>

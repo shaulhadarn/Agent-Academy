@@ -12,6 +12,7 @@ export interface Agent {
   capabilities: string[];
   catchphrase: string;
   quickCommands: string[];
+  detailedPersona?: string; // New field for deep expert context
 }
 
 export interface AgentTask {
@@ -21,6 +22,23 @@ export interface AgentTask {
   type: 'processing' | 'learning' | 'debugging' | 'deploying';
   priority: 'low' | 'medium' | 'high';
   completed: boolean;
+}
+
+export interface WorkflowLog {
+  id: string;
+  title: string;
+  timestamp: string;
+  status: 'success' | 'failed' | 'partial';
+  steps: {
+    agentName: string;
+    role: string;
+    status: string;
+  }[];
+  output?: {
+    type: 'html' | 'text' | 'json';
+    content: string;
+    title?: string;
+  };
 }
 
 export interface SystemUpgrade {
@@ -64,4 +82,5 @@ export interface AIConfig {
   provider: 'gemini' | 'openai';
   apiKey: string;
   model: string;
+  serperApiKey?: string;
 }
